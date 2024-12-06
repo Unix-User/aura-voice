@@ -71,6 +71,15 @@ Another thing to keep in mind is perceived wait time. Based on some research, it
    NEXT_PUBLIC_ELEVENLABS_VOICE_ID="YOUR ELEVENLABS VOICE ID"
    ```
 
+   optionaly, you can use [Ollama](https://ollama.com/) and [WebUI](https://github.com/open-webui/open-webui) instead of openai, to enable just fill the env with the right information
+
+   ```sh
+   WEBUI_API_KEY="https://ollama.udianix.com.br"
+   WEBUI_BASE_URL="https://ollama.udianix.com.br/audio/api/v1/transcriptions"
+   WEBUI_API_KEY="YOUR OPEN-WEBUI API KEY"
+   WEBUI_MODEL='llama3.2:latest'
+   ```
+
 3. Install the dependencies
 
    ```sh

@@ -155,7 +155,26 @@ const AssistantButton: React.FC = () => {
             navigator.mediaDevices
               .getUserMedia({ audio: true })
               .then((stream) => {
-                const newMediaRecorder = new MediaRecorder(stream);
+                // Especificar as opções do MediaRecorder
+                const options = {
+                  mimeType: 'audio/mpeg',
+                  audioBitsPerSecond: 128000
+                };
+                
+                let newMediaRecorder;
+                try {
+                  newMediaRecorder = new MediaRecorder(stream, options);
+                } catch (e) {
+                  try {
+                    // Tentar formato alternativo
+                    newMediaRecorder = new MediaRecorder(stream, {
+                      mimeType: 'audio/webm;codecs=opus'
+                    });
+                  } catch (e2) {
+                    // Último recurso - usar formato padrão
+                    newMediaRecorder = new MediaRecorder(stream);
+                  }
+                }
 
                 newMediaRecorder.onstart = () => {
                   chunks = [];
@@ -166,9 +185,7 @@ const AssistantButton: React.FC = () => {
                 };
 
                 newMediaRecorder.onstop = async () => {
-                  console.time("Entire function");
-
-                  const audioBlob = new Blob(chunks, { type: "audio/webm" });
+                  const audioBlob = new Blob(chunks, { type: "audio/mpeg" });
                   const audioUrl = URL.createObjectURL(audioBlob);
                   const audio = new Audio(audioUrl);
 
@@ -181,54 +198,57 @@ const AssistantButton: React.FC = () => {
                     reader.readAsDataURL(audioBlob);
 
                     reader.onloadend = async function () {
-                      const base64Audio = (reader.result as string).split(
-                        ","
-                      )[1]; // Ensure result is not null or undefined
+                      const base64Audio = (reader.result as string).split(",")[1];
 
                       if (base64Audio) {
-                        const response = await fetch("/api/speechToText", {
-                          method: "POST",
-                          headers: {
-                            "Content-Type": "application/json",
-                          },
-                          body: JSON.stringify({ audio: base64Audio }),
-                        });
-
-                        const data = await response.json();
-
-                        if (response.status !== 200) {
-                          throw (
-                            data.error ||
-                            new Error(
-                              `Request failed with status ${response.status}`
-                            )
-                          );
-                        }
-
-                        console.timeEnd("Speech to Text");
-
-                        const completion = await axios.post("/api/chat", {
-                          messages: [
-                            {
-                              role: "user",
-                              content: `${data.result} Your answer has to be as consise as possible.`,
+                        try {
+                          const response = await fetch("/api/speechToText", {
+                            method: "POST",
+                            headers: {
+                              "Content-Type": "application/json",
                             },
-                          ],
-                        });
+                            body: JSON.stringify({ 
+                              audio: base64Audio,
+                              contentType: "audio/mpeg"
+                            }),
+                          });
 
-                        handlePlayButtonClick(completion.data);
+                          if (!response.ok) {
+                            const errorData = await response.json();
+                            throw new Error(errorData.error || `Request failed with status ${response.status}`);
+                          }
+
+                          const data = await response.json();
+
+                          if (data.result || data.text) {
+                            const transcription = data.result || data.text;
+                            const completion = await axios.post("/api/chat", {
+                              messages: [
+                                {
+                                  role: "user",
+                                  content: `${transcription} Your answer has to be as concise as possible.`,
+                                },
+                              ],
+                            });
+                            handlePlayButtonClick(completion.data);
+                          } else {
+                            throw new Error("No transcription received");
+                          }
+                        } catch (error) {
+                          console.error("Error processing speech to text:", error);
+                          toast.error("Error processing speech to text. Please try again.");
+                        }
                       }
                     };
                   } catch (error) {
-                    console.log(error);
+                    console.error("Error processing audio:", error);
+                    toast.error("Error processing audio. Please try again.");
                   }
                 };
 
                 setMediaRecorder(newMediaRecorder);
               })
-              .catch((err) =>
-                console.error("Error accessing microphone:", err)
-              );
+              .catch((err) => console.error("Error accessing microphone:", err));
           }
 
           if (!mediaRecorderInitialized) {
